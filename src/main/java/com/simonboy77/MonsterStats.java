@@ -1,34 +1,39 @@
 package com.simonboy77;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
+import lombok.extern.slf4j.Slf4j; // Logging
 
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.stream.Collectors;
 
-import net.runelite.api.Client;
-import net.runelite.api.ChatMessageType;
-
+@Slf4j
 public class MonsterStats {
-    JSONArray jsonArray;
-    Client client;
+    private JSONObject jsonObject;
 
-    public MonsterStats(Client client)
+    public MonsterStats()
     {
-        this.client = client;
-
         InputStream is = ClassLoader.getSystemResourceAsStream("monster_essentials.json");
         BufferedReader reader = new BufferedReader(new InputStreamReader(is));
         String jsonString = reader.lines().collect(Collectors.joining(System.lineSeparator()));
-        this.jsonArray = new JSONArray(jsonString);
-
-        log("name: " + this.jsonArray.getJSONObject(0).getString("name"));
+        this.jsonObject = new JSONObject(jsonString);
     }
 
-    private void log(String text)
+    public boolean containsId(int id)
     {
-        this.client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", text, null);
+        return !(this.jsonObject.isNull(String.valueOf(id)));
+    }
+
+    public int getMaxHit(int id)
+    {
+        int maxHit = -1;
+
+        if(this.containsId(id)) {
+            String key = String.valueOf(id);
+            maxHit = this.jsonObject.getJSONObject(key).getInt("max_hit");
+        }
+
+        return maxHit;
     }
 }

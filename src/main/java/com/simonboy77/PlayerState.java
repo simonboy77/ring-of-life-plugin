@@ -1,16 +1,18 @@
 package com.simonboy77;
 
+import lombok.extern.slf4j.Slf4j; // Logging
+
 import net.runelite.api.Client;
-import net.runelite.api.Actor;
-import net.runelite.api.ChatMessageType;
+import net.runelite.api.NPC;
 import net.runelite.api.Skill;
 
+@Slf4j
 public class PlayerState {
-    private static final int RESULT_SURVIVE = 0;
-    private static final int RESULT_ESCAPE = 1;
-    private static final int RESULT_DEATH = 2;
-    private static final int USED_PHOENIX = 3;
-    private static final int RESULT_AMOUNT = 4;
+    private final Client client;
+    private final SurvivalChanceConfig config;
+    private final MonsterStats monsterStats;
+
+    private NPC[] opponents;
     private int[] resultOccurrences;
     private double[] resultChances;
 
@@ -18,42 +20,52 @@ public class PlayerState {
     private int defense;
     private int magic;
 
-    private final Client client;
+    // TODO: Add all defensive stats, crush defense, stab,magic, etc. OnGearChange
 
     public boolean wearingRingOfLife;
     public boolean wearingDefenceCape;
     public boolean wearingPhoenixNecklace;
 
-    public Actor[] opponents;
-    private MonsterStats monsterStats;
+    private int iterationsTest;
 
-    public PlayerState(Client client)
+    public PlayerState(Client client, SurvivalChanceConfig config)
     {
         this.client = client;
-        this.opponents = new Actor[0];
-        this.monsterStats = new MonsterStats(client);
+        this.config = config;
 
-        this.hitpoints = client.getBoostedSkillLevel(Skill.HITPOINTS);
-        this.defense = client.getBoostedSkillLevel(Skill.DEFENCE);
-        this.magic = client.getBoostedSkillLevel(Skill.MAGIC);
+        this.opponents = new NPC[0];
+        this.monsterStats = new MonsterStats();
+
+        this.hitpoints = this.client.getBoostedSkillLevel(Skill.HITPOINTS);
+        this.defense = this.client.getBoostedSkillLevel(Skill.DEFENCE);
+        this.magic = this.client.getBoostedSkillLevel(Skill.MAGIC);
     }
 
-    private void log(String text)
+    public boolean isInCombat()
     {
-        this.client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", text, null);
+        return (this.opponents.length > 0);
     }
 
-    public void addOpponent(Actor newOpponent)
+    public double getResultChance(int result)
     {
-        boolean isNew = true;
-        for(int opponentId = 0; (opponentId < this.opponents.length) && isNew; ++opponentId)
-        {
-            isNew &= (this.opponents[opponentId] != newOpponent);
+        if(this.isInCombat() && result >= HitResult.RESULT_SURVIVE && result < HitResult.RESULT_AMOUNT) {
+            return this.resultChances[result];
+        }
+        else {
+            return 0.0;
+        }
+    }
+
+    public void addOpponent(NPC newOpponent)
+    {
+        boolean isValid = this.monsterStats.containsId(newOpponent.getId());
+        for(int opponentId = 0; (opponentId < this.opponents.length) && isValid; ++opponentId) {
+            isValid &= (this.opponents[opponentId] != newOpponent);
         }
 
-        if(isNew)
+        if(isValid)
         {
-            Actor newOpponents[] = new Actor[this.opponents.length + 1];
+            NPC newOpponents[] = new NPC[this.opponents.length + 1];
 
             for(int opponentId = 0; opponentId < this.opponents.length; ++opponentId)
             {
@@ -63,16 +75,22 @@ public class PlayerState {
             newOpponents[this.opponents.length] = newOpponent;
             this.opponents = newOpponents;
 
-            log("Added " + newOpponent.getName() + " to list of opponents");
-            this.calcSurvivalChance(4, 3);
+            log.info("Added " + newOpponent.getName() + " to list of opponents");
+            log.info("maxHit: " + this.monsterStats.getMaxHit(newOpponent.getId()));
+            this.calcSurvivalChance();
         }
         else
         {
-            log(newOpponent.getName() + " was already on list of opponents");
+            if(!this.monsterStats.containsId(newOpponent.getId())) {
+                log.info(newOpponent.getName() + " is not a monster");
+            }
+            else {
+                log.info(newOpponent.getName() + " is already on list of opponents");
+            }
         }
     }
 
-    private void removeOpponent(Actor opponent)
+    private void removeOpponent(NPC opponent)
     {
         boolean isPresent = false;
         for(int opponentId = 0; (opponentId < this.opponents.length) && !isPresent; ++opponentId)
@@ -82,7 +100,7 @@ public class PlayerState {
 
         if(isPresent)
         {
-            Actor newOpponents[] = new Actor[this.opponents.length - 1];
+            NPC newOpponents[] = new NPC[this.opponents.length - 1];
             int newOpponentId = 0;
 
             for(int opponentId = 0; opponentId < this.opponents.length; ++opponentId)
@@ -94,13 +112,13 @@ public class PlayerState {
             }
 
             this.opponents = newOpponents;
-            log("Removed " + opponent.getName() + " from list of opponents");
+            log.info("Removed " + opponent.getName() + " from list of opponents");
 
-            this.calcSurvivalChance(4, 3);
+            this.calcSurvivalChance();
         }
         else
         {
-            log(opponent.getName() + " was not in list of opponents");
+            log.info(opponent.getName() + " was not in list of opponents");
         }
     }
 
@@ -108,9 +126,9 @@ public class PlayerState {
     {
         for(int opponentId = 0; opponentId < this.opponents.length;)
         {
-            Actor op = this.opponents[opponentId];
+            NPC op = this.opponents[opponentId];
 
-            if(op.getInteracting() != client.getLocalPlayer() || op.isDead()) {
+            if(op.getInteracting() != this.client.getLocalPlayer() || op.isDead()) {
                 removeOpponent(op);
             }
             else {
@@ -119,89 +137,166 @@ public class PlayerState {
         }
     }
 
-    private void hit_func(int hitNum, int hitAmount, int curDamage, int damageRange,
-                          boolean phoenix, int escapeThreshold, int deathThreshold)
+    private void hit_func_slow(int hitNum, int hitAmount, int curDamage, int maxDamage,
+                          boolean phoenix, int escapeDamage, int deathDamage)
     {
-        /* if phoenix gets triggered do:
-            nextDamage -= phoenixHealAmount
-            and pass false for the phoenix boolean, DONT CHANGE IT
-        */
+        ++this.iterationsTest;
 
         if(hitNum < hitAmount)
         {
-            for(int damage = 0; damage < damageRange; ++damage)
+            for(int damage = 0; damage <= maxDamage; ++damage)
             {
                 int nextDamage = curDamage + damage;
 
-                if(nextDamage >= deathThreshold) {
-                    this.resultOccurrences[RESULT_DEATH]++;
+                if(nextDamage >= deathDamage) {
+                    this.resultOccurrences[HitResult.RESULT_DEATH]++;
                 }
-                else if(nextDamage >= escapeThreshold) {
-                    this.resultOccurrences[RESULT_ESCAPE]++;
+                else if(nextDamage >= escapeDamage) {
+                    this.resultOccurrences[HitResult.RESULT_ESCAPE]++;
                 }
                 else {
-                    hit_func(hitNum + 1, hitAmount, nextDamage, damageRange, phoenix,
-                            escapeThreshold, deathThreshold);
+                    hit_func_slow(hitNum + 1, hitAmount, nextDamage, maxDamage, phoenix, escapeDamage, deathDamage);
                 }
             }
         }
         else if(hitAmount > 0)
         {
-            if(curDamage >= deathThreshold) {
-                this.resultOccurrences[RESULT_DEATH]++;
+            if(curDamage >= deathDamage) {
+                this.resultOccurrences[HitResult.RESULT_DEATH]++;
             }
-            else if(curDamage >= escapeThreshold) {
-                this.resultOccurrences[RESULT_ESCAPE]++;
+            else if(curDamage >= escapeDamage) {
+                this.resultOccurrences[HitResult.RESULT_ESCAPE]++;
             }
             else {
-                this.resultOccurrences[RESULT_SURVIVE]++;
+                this.resultOccurrences[HitResult.RESULT_SURVIVE]++;
+            }
+        }
+    }
+
+    private void hit_func(int hitNum, int hitAmount, int curDamage, int maxDamage,
+                          int triggerDamage, int deathDamage, boolean escapeItem, boolean phoenix)
+    {
+        // TODO: Should I add minDamage? Now its assumed to always be zero
+
+        /* if phoenix gets triggered do:
+            nextDamage -= phoenixHealAmount
+            and pass false for the phoenix boolean, DONT CHANGE IT
+        */
+
+        ++this.iterationsTest;
+
+        if(hitNum < hitAmount)
+        {
+            /*
+            Do the damage for loop from high to low
+
+            When the maxTotalDamage can trigger an escape or kill, keep going with the recursion
+            otherwise, calculate how many hits would follow the current one and add those to results[SURVIVAL]
+
+
+            */
+
+            for(int damage = maxDamage; damage >= 0; --damage)
+            {
+                boolean triggerItem = (escapeItem || phoenix);
+                int nextDamage = curDamage + damage;
+
+                if(nextDamage >= deathDamage)
+                {
+                    this.resultOccurrences[HitResult.RESULT_DEATH]++;
+                }
+                else if(triggerItem && nextDamage >= triggerDamage)
+                {
+                    // TODO: if phoenix
+                    this.resultOccurrences[HitResult.RESULT_ESCAPE]++;
+                }
+                else // Check if all of the remaining hits are safe
+                {
+                    int remainingHits = hitAmount - (hitNum + 1);
+                    int maxTotalDamage = nextDamage + (maxDamage * remainingHits);
+                    //log.info("max total damage from " + nextDamage + ": " + maxTotalDamage);
+
+                    if((escapeItem || phoenix) && (maxTotalDamage >= triggerDamage))
+                    {
+                        // TODO: if phoenix
+                        hit_func(hitNum + 1, hitAmount, nextDamage, maxDamage, triggerDamage, deathDamage, escapeItem, phoenix);
+                    }
+                    else if(maxTotalDamage >= deathDamage)
+                    {
+                        hit_func(hitNum + 1, hitAmount, nextDamage, maxDamage, triggerDamage, deathDamage, escapeItem, phoenix);
+                    }
+                    else // All following hits are safe
+                    {
+                        int remainingHitOccurrences = (damage + 1) * (int)Math.pow((double)(maxDamage + 1), (double)remainingHits);
+                        this.resultOccurrences[HitResult.RESULT_SURVIVE] += remainingHitOccurrences;
+                        break;
+                    }
+                }
+            }
+        }
+        else if(hitAmount > 0)
+        {
+            if(curDamage >= deathDamage) {
+                this.resultOccurrences[HitResult.RESULT_DEATH]++;
+            }
+            else if(curDamage >= triggerDamage) {
+                this.resultOccurrences[HitResult.RESULT_ESCAPE]++;
+            }
+            else {
+                this.resultOccurrences[HitResult.RESULT_SURVIVE]++;
             }
         }
     }
 
     private double calcHitChance()
     {
-        double chanceToHit = 0.0;
+        double chanceToHit = 1.0;
 
-        int playerDefence = client.getBoostedSkillLevel(Skill.DEFENCE);
-        int playerMagic = client.getBoostedSkillLevel(Skill.MAGIC);
+        //int playerDefence = this.client.getBoostedSkillLevel(Skill.DEFENCE);
+        //int playerMagic = this.client.getBoostedSkillLevel(Skill.MAGIC);
 
         
 
         return chanceToHit;
     }
 
-    public void calcSurvivalChance(int hitAmount, int maxHit)
+    public void calcSurvivalChance()
     {
-        if(this.opponents.length > 0)
+        if(this.isInCombat())
         {
             double chanceToHit = calcHitChance();
 
-            int maxHp = client.getRealSkillLevel(Skill.HITPOINTS);
-            int curHp = client.getBoostedSkillLevel(Skill.HITPOINTS);
+            int hitAmount = this.config.hitTurns();
+            int maxHit = this.monsterStats.getMaxHit(this.opponents[0].getId());
+            int maxHp = this.client.getRealSkillLevel(Skill.HITPOINTS);
 
             // TODO: if wearing ring of life/defence cape
-            int escapeThreshold = curHp - (int)Math.floor(maxHp / 10.0);
-            this.resultOccurrences = new int[RESULT_AMOUNT];
-            this.resultChances = new double[RESULT_AMOUNT];
+            int triggerDamage = this.hitpoints - (int)Math.floor(maxHp / 10.0);
+            this.resultOccurrences = new int[HitResult.RESULT_AMOUNT];
+            this.resultChances = new double[HitResult.RESULT_AMOUNT];
 
-            hit_func(0, hitAmount, 0, maxHit, false, escapeThreshold, curHp);
+            this.iterationsTest = 0;
+
+            hit_func(0, hitAmount, 0, maxHit, triggerDamage, this.hitpoints, true, false);
+            //hit_func_slow(0, hitAmount, 0, maxHit, false, triggerDamage, this.hitpoints);
 
             // Parse results
             double totalHits = 0.0;
 
-            for(int resultId = 0; resultId < RESULT_AMOUNT; ++resultId) {
+            for(int resultId = 0; resultId < HitResult.RESULT_AMOUNT; ++resultId) {
                 totalHits += this.resultOccurrences[resultId];
             }
 
-            for(int resultId = 0; resultId < RESULT_AMOUNT; ++resultId) {
+            for(int resultId = 0; resultId < HitResult.RESULT_AMOUNT; ++resultId) {
                 double chance = ((double)this.resultOccurrences[resultId] / totalHits) * 100.0;
                 this.resultChances[resultId] = chance;
             }
 
-            log("safety: " + this.resultChances[RESULT_SURVIVE] +
-                    ", escape: " + this.resultChances[RESULT_ESCAPE] +
-                    ", die: " + this.resultChances[RESULT_DEATH]);
+            log.info("safety: " + this.resultChances[HitResult.RESULT_SURVIVE] +
+                    ", escape: " + this.resultChances[HitResult.RESULT_ESCAPE] +
+                    ", die: " + this.resultChances[HitResult.RESULT_DEATH] +
+                    ", totalHits: " + totalHits +
+                    ", iterations: " + this.iterationsTest);
         }
     }
 
@@ -211,31 +306,31 @@ public class PlayerState {
         {
             case HITPOINTS:
             {
-                if(this.hitpoints != client.getBoostedSkillLevel(Skill.HITPOINTS))
+                if(this.hitpoints != this.client.getBoostedSkillLevel(Skill.HITPOINTS))
                 {
-                    this.hitpoints = client.getBoostedSkillLevel(Skill.HITPOINTS);
-                    log("hitpoints changed to " + this.hitpoints);
-                    this.calcSurvivalChance(4, 3);
+                    this.hitpoints = this.client.getBoostedSkillLevel(Skill.HITPOINTS);
+                    log.info("hitpoints changed to " + this.hitpoints);
+                    this.calcSurvivalChance();
                 }
             } break;
 
             case DEFENCE:
             {
-                if(this.defense != client.getBoostedSkillLevel(Skill.DEFENCE))
+                if(this.defense != this.client.getBoostedSkillLevel(Skill.DEFENCE))
                 {
-                    this.defense = client.getBoostedSkillLevel(Skill.DEFENCE);
-                    log("defense changed to " + this.defense);
-                    this.calcSurvivalChance(4, 3);
+                    this.defense = this.client.getBoostedSkillLevel(Skill.DEFENCE);
+                    log.info("defense changed to " + this.defense);
+                    this.calcSurvivalChance();
                 }
             } break;
 
             case MAGIC:
             {
-                if(this.magic != client.getBoostedSkillLevel(Skill.MAGIC))
+                if(this.magic != this.client.getBoostedSkillLevel(Skill.MAGIC))
                 {
-                    this.magic = client.getBoostedSkillLevel(Skill.MAGIC);
-                    log("magic changed to " + this.magic);
-                    this.calcSurvivalChance(4, 3);
+                    this.magic = this.client.getBoostedSkillLevel(Skill.MAGIC);
+                    log.info("magic changed to " + this.magic);
+                    this.calcSurvivalChance();
                 }
             } break;
 

@@ -8,15 +8,51 @@ import net.runelite.client.config.Range;
 @ConfigGroup("survival-chance")
 public interface SurvivalChanceConfig extends Config
 {
-	enum DropdownExample
-	{
-		THIS,
-		THAT,
-		SUCH,
-		SO
-	};
+	@ConfigItem(
+			keyName = "hitTurns",
+			name = "Turn Amount",
+			description = "How many turns ahead to calculate",
+			position = 1
+	)
+	@Range(
+			min = 1,
+			max = 10
+	)
+	default int hitTurns() { return 1; }
 
-	enum ShowInfoBox
+	@ConfigItem(
+			keyName = "showSurvivalChance",
+			name = "Show Survival Chance",
+			description = "Show the chance of survival after the selected amount of turns",
+			position = 2
+	)
+	default boolean showSurvivalChance() { return true; }
+
+	@ConfigItem(
+			keyName = "showEscapeChance",
+			name = "Show Escape Chance",
+			description = "Show the chance of triggering an escape after the selected amount of turns",
+			position = 3
+	)
+	default boolean showEscapeChance() { return true; }
+
+	@ConfigItem(
+			keyName = "showDeathChance",
+			name = "Show Death Chance",
+			description = "Show the chance of dying after the selected amount of turns",
+			position = 4
+	)
+	default boolean showDeathChance() { return true; }
+
+	@ConfigItem(
+			keyName = "showPhoenixChance",
+			name = "Show Phoenix Usage Chance",
+			description = "Show the chance of using your phoenix after the selected amount of turns",
+			position = 5
+	)
+	default boolean showPhoenixChance() { return true; }
+
+	enum WarningShow
 	{
 		ALWAYS,
 		IN_COMBAT,
@@ -24,41 +60,18 @@ public interface SurvivalChanceConfig extends Config
 	};
 
 	@ConfigItem(
-			keyName = "showInfoBox",
-			name = "Show Info Box: ",
-			description = "When to show the info box"
+			keyName = "warnEscapeItem",
+			name = "Escape Item Warning",
+			description = "Display a warning when not wearing an escape item (ring of life, defence cape or escape crystal)",
+			position = 6
 	)
-	default ShowInfoBox showInfoBox() { return ShowInfoBox.ALWAYS; }
+	default WarningShow warnEscapeItem() { return WarningShow.IN_COMBAT; }
 
 	@ConfigItem(
-			keyName = "testCheckBox",
-			name = "Test Check Box",
-			description = "Testing testing testing"
+			keyName = "warnPhoenix",
+			name = "Phoenix Warning",
+			description = "Display a warning when not wearing a phoenix necklace",
+			position = 7
 	)
-	default boolean testCheckBox() { return false; }
-
-	@ConfigItem(
-			keyName = "usePlayerEquipment",
-			name = "Include equipment in calculation",
-			description = "Whether to take player equipment into account when calculating"
-	)
-	default boolean testPlayerEquipment() { return false; }
-
-	@ConfigItem(
-		keyName = "greeting",
-		name = "Welcome Greeting",
-		description = "The message to show to the user when they login"
-	)
-	default String greeting() { return "Goodbye"; }
-
-	@ConfigItem(
-			keyName = "hitTurns",
-			name = "Turn Amount",
-			description = "How many turns ahead to calculate"
-	)
-	@Range(
-			min = 1,
-			max = 10
-	)
-	default int hitTurns() { return 1; }
+	default WarningShow warnPhoenix() { return WarningShow.IN_COMBAT; }
 }
