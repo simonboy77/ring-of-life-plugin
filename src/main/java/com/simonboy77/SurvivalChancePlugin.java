@@ -5,14 +5,17 @@ package com.simonboy77;
 
 import com.google.inject.Provides;
 
-import javax.annotation.Nullable;
 import javax.inject.Inject;
 
-// TODO remove those import blah.blah.* statements
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.*;
-import net.runelite.api.events.*;
+
+import net.runelite.api.Client;
+import net.runelite.api.ChatMessageType;
+import net.runelite.api.events.GameTick;
+import net.runelite.api.events.StatChanged;
+import net.runelite.api.events.InteractingChanged;
+import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.InventoryID;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
@@ -20,16 +23,15 @@ import net.runelite.client.plugins.PluginDescriptor;
 
 import net.runelite.client.ui.overlay.OverlayManager;
 
-import static com.simonboy77.WikiScraper.getMonsterMaxHit; // huh?
 import static net.runelite.api.ItemID.RING_OF_LIFE;
 import static net.runelite.api.ItemID.DEFENCE_CAPE;
 import static net.runelite.api.ItemID.PHOENIX_NECKLACE;
 
 @Slf4j
 @PluginDescriptor(
-	name = "Ring of Life"
+	name = "Survival Chance"
 )
-public class RingOfLifePlugin extends Plugin
+public class SurvivalChancePlugin extends Plugin
 {
 	@Inject
 	private Client client;
@@ -38,10 +40,10 @@ public class RingOfLifePlugin extends Plugin
 	private OverlayManager overlayManager;
 
 	@Inject
-	private RingOfLifeOverlay overlay;
+	private SurvivalChanceOverlay overlay;
 
 	@Inject
-	private RingOfLifeConfig config;
+	private SurvivalChanceConfig config;
 
 	private PlayerState playerState;
 
@@ -67,17 +69,23 @@ public class RingOfLifePlugin extends Plugin
 	public void onInteractingChanged(InteractingChanged event)
 	{
 		// (healthRatio == 0) == opponent died , (healthRatio == -1) == npc has no health
-		if (event.getSource() == client.getLocalPlayer())  {
+		/*if (event.getSource() == client.getLocalPlayer())  {
 			if(event.getTarget().getHealthRatio() > 0) {
-				playerState.setOpponent(event.getTarget());
+				playerState.addOpponent(event.getTarget());
 				playerState.calcSurvivalChance(4, 3);
 			}
-		}
-		else if(event.getTarget() == client.getLocalPlayer())
+		}*/
+
+		// All that matters is who is attacking the player
+		if(event.getTarget() == client.getLocalPlayer())
 		{
-			if(event.getSource().getHealthRatio() > 0) {
-				playerState.setOpponent(event.getSource());
-				playerState.calcSurvivalChance(4, 3);
+			// NOTE: healthRatio/Scale are only visible after the player has attacked
+			// TODO: Check name/id to see if its in the monster.json file
+			boolean isLegitOpponent = true;
+			log("Player is interacted with");
+
+			if(isLegitOpponent) {
+				playerState.addOpponent(event.getSource());
 			}
 		}
 	}
@@ -85,20 +93,15 @@ public class RingOfLifePlugin extends Plugin
 	@Subscribe
 	public void onGameTick(GameTick gameTick)
 	{
-		// client.getLocalPlayer().getInteracting() == null
-		if (playerState.curOpponent != null &&
-				playerState.curOpponent.getInteracting() != client.getLocalPlayer()) {
-			playerState.setOpponent(null);
+		if (playerState.opponents.length > 0) {
+			playerState.updateOpponents();
 		}
 	}
 
 	@Subscribe
 	public void onStatChanged(StatChanged statChanged)
 	{
-		Skill skill = statChanged.getSkill();
-		if(skill == Skill.HITPOINTS || skill == Skill.DEFENCE || skill == Skill.MAGIC) {
-			playerState.calcSurvivalChance(4, 3);
-		}
+		playerState.statChanged(statChanged.getSkill());
 	}
 
 	/*@Subscribe
@@ -122,8 +125,8 @@ public class RingOfLifePlugin extends Plugin
 	}
 
 	@Provides
-	RingOfLifeConfig provideConfig(ConfigManager configManager)
+	SurvivalChanceConfig provideConfig(ConfigManager configManager)
 	{
-		return configManager.getConfig(RingOfLifeConfig.class);
+		return configManager.getConfig(SurvivalChanceConfig.class);
 	}
 }

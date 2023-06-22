@@ -1,7 +1,7 @@
 package com.simonboy77;
 
-import net.runelite.api.Actor;
 import net.runelite.api.Client;
+import net.runelite.api.Actor;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Skill;
 
@@ -14,19 +14,28 @@ public class PlayerState {
     private int[] resultOccurrences;
     private double[] resultChances;
 
+    private int hitpoints;
+    private int defense;
+    private int magic;
+
     private final Client client;
 
     public boolean wearingRingOfLife;
     public boolean wearingDefenceCape;
     public boolean wearingPhoenixNecklace;
 
-    public boolean inCombat;
-
-    public Actor curOpponent;
+    public Actor[] opponents;
+    private MonsterStats monsterStats;
 
     public PlayerState(Client client)
     {
         this.client = client;
+        this.opponents = new Actor[0];
+        this.monsterStats = new MonsterStats(client);
+
+        this.hitpoints = client.getBoostedSkillLevel(Skill.HITPOINTS);
+        this.defense = client.getBoostedSkillLevel(Skill.DEFENCE);
+        this.magic = client.getBoostedSkillLevel(Skill.MAGIC);
     }
 
     private void log(String text)
@@ -34,18 +43,78 @@ public class PlayerState {
         this.client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", text, null);
     }
 
-    public void setOpponent(Actor opponent)
+    public void addOpponent(Actor newOpponent)
     {
-        if(opponent != curOpponent)
+        boolean isNew = true;
+        for(int opponentId = 0; (opponentId < this.opponents.length) && isNew; ++opponentId)
         {
-            this.curOpponent = opponent;
-            this.inCombat = (this.curOpponent != null);
+            isNew &= (this.opponents[opponentId] != newOpponent);
+        }
 
-            if(this.inCombat) {
-                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "fighting: " + this.curOpponent.getName(), null);
+        if(isNew)
+        {
+            Actor newOpponents[] = new Actor[this.opponents.length + 1];
+
+            for(int opponentId = 0; opponentId < this.opponents.length; ++opponentId)
+            {
+                newOpponents[opponentId] = this.opponents[opponentId];
+            }
+
+            newOpponents[this.opponents.length] = newOpponent;
+            this.opponents = newOpponents;
+
+            log("Added " + newOpponent.getName() + " to list of opponents");
+            this.calcSurvivalChance(4, 3);
+        }
+        else
+        {
+            log(newOpponent.getName() + " was already on list of opponents");
+        }
+    }
+
+    private void removeOpponent(Actor opponent)
+    {
+        boolean isPresent = false;
+        for(int opponentId = 0; (opponentId < this.opponents.length) && !isPresent; ++opponentId)
+        {
+            isPresent |= (this.opponents[opponentId] == opponent);
+        }
+
+        if(isPresent)
+        {
+            Actor newOpponents[] = new Actor[this.opponents.length - 1];
+            int newOpponentId = 0;
+
+            for(int opponentId = 0; opponentId < this.opponents.length; ++opponentId)
+            {
+                if(this.opponents[opponentId] != opponent)
+                {
+                    newOpponents[newOpponentId++] = this.opponents[opponentId];
+                }
+            }
+
+            this.opponents = newOpponents;
+            log("Removed " + opponent.getName() + " from list of opponents");
+
+            this.calcSurvivalChance(4, 3);
+        }
+        else
+        {
+            log(opponent.getName() + " was not in list of opponents");
+        }
+    }
+
+    public void updateOpponents()
+    {
+        for(int opponentId = 0; opponentId < this.opponents.length;)
+        {
+            Actor op = this.opponents[opponentId];
+
+            if(op.getInteracting() != client.getLocalPlayer() || op.isDead()) {
+                removeOpponent(op);
             }
             else {
-                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "out of combat", null);
+                opponentId++;
             }
         }
     }
@@ -104,7 +173,7 @@ public class PlayerState {
 
     public void calcSurvivalChance(int hitAmount, int maxHit)
     {
-        if(this.inCombat)
+        if(this.opponents.length > 0)
         {
             double chanceToHit = calcHitChance();
 
@@ -133,6 +202,44 @@ public class PlayerState {
             log("safety: " + this.resultChances[RESULT_SURVIVE] +
                     ", escape: " + this.resultChances[RESULT_ESCAPE] +
                     ", die: " + this.resultChances[RESULT_DEATH]);
+        }
+    }
+
+    public void statChanged(Skill skill)
+    {
+        switch(skill)
+        {
+            case HITPOINTS:
+            {
+                if(this.hitpoints != client.getBoostedSkillLevel(Skill.HITPOINTS))
+                {
+                    this.hitpoints = client.getBoostedSkillLevel(Skill.HITPOINTS);
+                    log("hitpoints changed to " + this.hitpoints);
+                    this.calcSurvivalChance(4, 3);
+                }
+            } break;
+
+            case DEFENCE:
+            {
+                if(this.defense != client.getBoostedSkillLevel(Skill.DEFENCE))
+                {
+                    this.defense = client.getBoostedSkillLevel(Skill.DEFENCE);
+                    log("defense changed to " + this.defense);
+                    this.calcSurvivalChance(4, 3);
+                }
+            } break;
+
+            case MAGIC:
+            {
+                if(this.magic != client.getBoostedSkillLevel(Skill.MAGIC))
+                {
+                    this.magic = client.getBoostedSkillLevel(Skill.MAGIC);
+                    log("magic changed to " + this.magic);
+                    this.calcSurvivalChance(4, 3);
+                }
+            } break;
+
+            default: break;
         }
     }
 }

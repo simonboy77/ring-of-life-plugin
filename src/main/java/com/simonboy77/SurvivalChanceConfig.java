@@ -5,8 +5,8 @@ import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.Range;
 
-@ConfigGroup("ring-of-life")
-public interface RingOfLifeConfig extends Config
+@ConfigGroup("survival-chance")
+public interface SurvivalChanceConfig extends Config
 {
 	enum DropdownExample
 	{
