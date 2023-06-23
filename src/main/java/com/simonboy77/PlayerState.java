@@ -2,17 +2,20 @@ package com.simonboy77;
 
 import lombok.extern.slf4j.Slf4j; // Logging
 
-import net.runelite.api.Client;
-import net.runelite.api.ItemContainer;
-import net.runelite.api.NPC;
-import net.runelite.api.Skill;
+import net.runelite.api.*;
+
+import net.runelite.client.game.ItemManager;
+import net.runelite.http.api.item.ItemStats;
+import net.runelite.http.api.item.ItemEquipmentStats;
 
 import static net.runelite.api.ItemID.*;
+import static net.runelite.api.EquipmentInventorySlot.*;
 
 @Slf4j
 public class PlayerState {
     private final Client client;
     private final SurvivalChanceConfig config;
+    private final ItemManager itemManager;
     private final MonsterStats monsterStats;
 
     private NPC[] opponents;
@@ -24,21 +27,22 @@ public class PlayerState {
     private int magic;
     // private int prayer;
 
-    private int stab_defence;
-    private int slash_defence;
-    private int crush_defence;
-    private int magic_defence;
-    private int range_defence;
+    private int stabDefence;
+    private int slashDefence;
+    private int crushDefence;
+    private int magicDefence;
+    private int rangeDefence;
 
     private boolean wearingEscapeItem;
     private boolean wearingPhoenix;
 
     private int iterationsTest;
 
-    public PlayerState(Client client, SurvivalChanceConfig config)
+    public PlayerState(Client client, SurvivalChanceConfig config, ItemManager itemManager)
     {
         this.client = client;
         this.config = config;
+        this.itemManager = itemManager;
 
         this.opponents = new NPC[0];
         this.monsterStats = new MonsterStats();
@@ -159,7 +163,29 @@ public class PlayerState {
         this.wearingEscapeItem = equipment.contains(RING_OF_LIFE) || equipment.contains(DEFENCE_CAPE);
         this.wearingPhoenix = equipment.contains(PHOENIX_NECKLACE);
 
-        log.info("escapeItem: " + this.wearingEscapeItem + ", phoenix: " + this.wearingPhoenix);
+        this.stabDefence = 0; this.slashDefence = 0; this.crushDefence = 0;
+        this.magicDefence = 0; this.rangeDefence = 0;
+
+        for(EquipmentInventorySlot slot : EquipmentInventorySlot.values())
+        {
+            Item slotItem = equipment.getItem(slot.getSlotIdx());
+            if(slotItem != null)
+            {
+                ItemStats itemStats = this.itemManager.getItemStats(slotItem.getId(), false);
+                if(itemStats != null && itemStats.isEquipable())
+                {
+                    ItemEquipmentStats equipmentStats = itemStats.getEquipment();
+                    if(equipmentStats != null)
+                    {
+                        this.stabDefence += equipmentStats.getDstab();
+                        this.slashDefence += equipmentStats.getDslash();
+                        this.crushDefence += equipmentStats.getDcrush();
+                        this.magicDefence += equipmentStats.getDmagic();
+                        this.rangeDefence += equipmentStats.getDrange();
+                    }
+                }
+            }
+        }
     }
 
     private void hit_func_slow(int hitNum, int hitAmount, int curDamage, int maxDamage,

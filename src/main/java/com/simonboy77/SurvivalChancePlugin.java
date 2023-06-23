@@ -20,6 +20,7 @@ import net.runelite.api.InventoryID;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.infobox.InfoBox;
@@ -38,23 +39,17 @@ public class SurvivalChancePlugin extends Plugin
 	private SurvivalChanceConfig config;
 
 	@Inject
+	private ItemManager itemManager;
+
+	@Inject
 	private InfoBoxManager infoBoxManager;
 
 	private PlayerState playerState;
-	//private ChanceInfoBox escapeInfoBox;
-	//private ChanceInfoBox phoenixInfoBox;
 
 	@Override
 	protected void startUp() throws Exception
 	{
-		this.playerState = new PlayerState(this.client, this.config);
-
-		//this.escapeInfoBox = new ChanceInfoBox(this.client, this, this.config, this.playerState,
-				//HitResult.RESULT_ESCAPE, this.getInfoBoxIcon(HitResult.RESULT_ESCAPE));
-		//this.phoenixInfoBox = new ChanceInfoBox(this.client, this, this.config, this.playerState,
-				//HitResult.USED_PHOENIX, this.getInfoBoxIcon(HitResult.USED_PHOENIX));
-
-		//this.infoBoxManager.addInfoBox();
+		this.playerState = new PlayerState(this.client, this.config, this.itemManager);
 
 		for(int hitResultId = HitResult.RESULT_SURVIVE; hitResultId < HitResult.RESULT_AMOUNT; ++hitResultId) {
 			this.infoBoxManager.addInfoBox(new ChanceInfoBox(this.client, this, this.config,
