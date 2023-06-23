@@ -10,7 +10,6 @@ import java.io.IOException;
 import javax.imageio.ImageIO;
 
 import net.runelite.api.Client;
-import net.runelite.api.Skill;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.InteractingChanged;
@@ -23,12 +22,8 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.overlay.infobox.InfoBox;
 import net.runelite.client.ui.overlay.infobox.InfoBoxManager;
-import net.runelite.client.game.SkillIconManager;
-
-import static net.runelite.api.ItemID.RING_OF_LIFE;
-import static net.runelite.api.ItemID.DEFENCE_CAPE;
-import static net.runelite.api.ItemID.PHOENIX_NECKLACE;
 
 @Slf4j
 @PluginDescriptor(
@@ -45,18 +40,24 @@ public class SurvivalChancePlugin extends Plugin
 	@Inject
 	private InfoBoxManager infoBoxManager;
 
-	@Inject
-	private SkillIconManager skillIconManager;
-
 	private PlayerState playerState;
+	//private ChanceInfoBox escapeInfoBox;
+	//private ChanceInfoBox phoenixInfoBox;
 
 	@Override
 	protected void startUp() throws Exception
 	{
 		this.playerState = new PlayerState(this.client, this.config);
 
+		//this.escapeInfoBox = new ChanceInfoBox(this.client, this, this.config, this.playerState,
+				//HitResult.RESULT_ESCAPE, this.getInfoBoxIcon(HitResult.RESULT_ESCAPE));
+		//this.phoenixInfoBox = new ChanceInfoBox(this.client, this, this.config, this.playerState,
+				//HitResult.USED_PHOENIX, this.getInfoBoxIcon(HitResult.USED_PHOENIX));
+
+		//this.infoBoxManager.addInfoBox();
+
 		for(int hitResultId = HitResult.RESULT_SURVIVE; hitResultId < HitResult.RESULT_AMOUNT; ++hitResultId) {
-			this.infoBoxManager.addInfoBox(new SurvivalChanceInfoBox(this.client, this, this.config,
+			this.infoBoxManager.addInfoBox(new ChanceInfoBox(this.client, this, this.config,
 					this.playerState, hitResultId, this.getInfoBoxIcon(hitResultId)));
 		}
 	}
@@ -64,7 +65,7 @@ public class SurvivalChancePlugin extends Plugin
 	@Override
 	protected void shutDown() throws Exception
 	{
-		this.infoBoxManager.removeIf(t -> t instanceof SurvivalChanceInfoBox);
+		this.infoBoxManager.removeIf(t -> t instanceof ChanceInfoBox);
 	}
 
 	private BufferedImage getInfoBoxIcon(int resultId)
@@ -76,9 +77,36 @@ public class SurvivalChancePlugin extends Plugin
 			switch(resultId)
 			{
 				case HitResult.RESULT_SURVIVE: { filePath = "icons/survival.png"; } break;
-				case HitResult.RESULT_ESCAPE: { filePath = "icons/escape.png"; } break;
+				case HitResult.RESULT_ESCAPE:
+				{
+					if(this.playerState.isWearingEscapeItem()) {
+						if(this.config.altEscapeIcon()) {
+							filePath = "icons/escape_alt.png";
+						}
+						else {
+							filePath = "icons/escape.png";
+						}
+					}
+					else {
+						if(this.config.altEscapeIcon()) {
+							filePath = "icons/escape_warning_alt.png";
+						}
+						else {
+							filePath = "icons/escape_warning.png";
+						}
+					}
+
+				} break;
 				case HitResult.RESULT_DEATH: { filePath = "icons/death.png"; } break;
-				case HitResult.USED_PHOENIX: { filePath = "icons/phoenix.png"; } break;
+				case HitResult.USED_PHOENIX:
+				{
+					if(this.playerState.isWearingPhoenix()) {
+						filePath = "icons/phoenix.png";
+					}
+					else {
+						filePath = "icons/phoenix_warning.png";
+					}
+				} break;
 			}
 
 			return ImageIO.read(getClass().getClassLoader().getResource(filePath));
@@ -89,6 +117,22 @@ public class SurvivalChancePlugin extends Plugin
 		}
 
 		return null;
+	}
+
+	private void updateInfoBox(int resultId)
+	{
+		for(InfoBox infoBox : this.infoBoxManager.getInfoBoxes())
+		{
+			if(infoBox instanceof ChanceInfoBox)
+			{
+				if(((ChanceInfoBox)infoBox).getResultId() == resultId) {
+					infoBox.setImage(this.getInfoBoxIcon(resultId));
+					infoBox.setTooltip(infoBox.getName());
+					this.infoBoxManager.updateInfoBoxImage(infoBox);
+					break;
+				}
+			}
+		}
 	}
 
 	@Subscribe
@@ -120,19 +164,29 @@ public class SurvivalChancePlugin extends Plugin
 		// Check if changed container is equipment
 		if(event.getItemContainer().getId() == InventoryID.EQUIPMENT.getId())
 		{
-			this.playerState.wearingRingOfLife = event.getItemContainer().contains(RING_OF_LIFE);
-			this.playerState.wearingDefenceCape = event.getItemContainer().contains(DEFENCE_CAPE);
-			this.playerState.wearingPhoenixNecklace = event.getItemContainer().contains(PHOENIX_NECKLACE);
+			boolean wasWearingEscapeItem = this.playerState.isWearingEscapeItem();
+			boolean wasWearingPhoenix = this.playerState.isWearingPhoenix();
+
+			this.playerState.updateEquipment(event.getItemContainer());
+
+			if(wasWearingEscapeItem != this.playerState.isWearingEscapeItem()) {
+				this.updateInfoBox(HitResult.RESULT_ESCAPE);
+			}
+
+			if(wasWearingPhoenix != this.playerState.isWearingPhoenix()) {
+				this.updateInfoBox(HitResult.USED_PHOENIX);
+			}
 		}
 	}
 
 	@Subscribe
 	public void onConfigChanged(ConfigChanged configChanged)
 	{
-		if(configChanged.getKey().equals("hitTurns"))
-		{
-			log.info("Changed hitTurns");
+		if(configChanged.getKey().equals("hitTurns")) {
 			this.playerState.calcSurvivalChance();
+		}
+		else if(configChanged.getKey().equals("altEscapeIcon")) {
+			this.updateInfoBox(HitResult.RESULT_ESCAPE);
 		}
 	}
 

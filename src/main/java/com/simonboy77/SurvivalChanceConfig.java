@@ -18,7 +18,7 @@ public interface SurvivalChanceConfig extends Config
 			min = 1,
 			max = 10
 	)
-	default int hitTurns() { return 1; }
+	default int hitTurns() { return 2; }
 
 	@ConfigItem(
 			keyName = "showSurvivalChance",
@@ -74,4 +74,12 @@ public interface SurvivalChanceConfig extends Config
 			position = 7
 	)
 	default WarningShow warnPhoenix() { return WarningShow.IN_COMBAT; }
+
+	@ConfigItem(
+			keyName = "altEscapeIcon",
+			name = "Alternative Escape Icon",
+			description = "Use the alternative version of the escape icon",
+			position = 8
+	)
+	default boolean altEscapeIcon() { return false; }
 }

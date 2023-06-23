@@ -3,8 +3,11 @@ package com.simonboy77;
 import lombok.extern.slf4j.Slf4j; // Logging
 
 import net.runelite.api.Client;
+import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
 import net.runelite.api.Skill;
+
+import static net.runelite.api.ItemID.*;
 
 @Slf4j
 public class PlayerState {
@@ -19,12 +22,16 @@ public class PlayerState {
     private int hitpoints;
     private int defense;
     private int magic;
+    // private int prayer;
 
-    // TODO: Add all defensive stats, crush defense, stab,magic, etc. OnGearChange
+    private int stab_defence;
+    private int slash_defence;
+    private int crush_defence;
+    private int magic_defence;
+    private int range_defence;
 
-    public boolean wearingRingOfLife;
-    public boolean wearingDefenceCape;
-    public boolean wearingPhoenixNecklace;
+    private boolean wearingEscapeItem;
+    private boolean wearingPhoenix;
 
     private int iterationsTest;
 
@@ -39,6 +46,16 @@ public class PlayerState {
         this.hitpoints = this.client.getBoostedSkillLevel(Skill.HITPOINTS);
         this.defense = this.client.getBoostedSkillLevel(Skill.DEFENCE);
         this.magic = this.client.getBoostedSkillLevel(Skill.MAGIC);
+    }
+
+    public boolean isWearingEscapeItem()
+    {
+        return this.wearingEscapeItem;
+    }
+
+    public boolean isWearingPhoenix()
+    {
+        return this.wearingPhoenix;
     }
 
     public boolean isInCombat()
@@ -135,6 +152,14 @@ public class PlayerState {
                 opponentId++;
             }
         }
+    }
+
+    public void updateEquipment(ItemContainer equipment)
+    {
+        this.wearingEscapeItem = equipment.contains(RING_OF_LIFE) || equipment.contains(DEFENCE_CAPE);
+        this.wearingPhoenix = equipment.contains(PHOENIX_NECKLACE);
+
+        log.info("escapeItem: " + this.wearingEscapeItem + ", phoenix: " + this.wearingPhoenix);
     }
 
     private void hit_func_slow(int hitNum, int hitAmount, int curDamage, int maxDamage,
