@@ -10,10 +10,12 @@ import java.io.IOException;
 import javax.imageio.ImageIO;
 
 import net.runelite.api.Client;
+import net.runelite.api.Varbits;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.InteractingChanged;
 import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.NPC;
 import net.runelite.api.InventoryID;
 
@@ -140,7 +142,7 @@ public class SurvivalChancePlugin extends Plugin
 	}
 
 	@Subscribe
-	public void onGameTick(GameTick gameTick)
+	public void onGameTick(GameTick event)
 	{
 		if (this.playerState.isInCombat()) {
 			this.playerState.updateOpponents();
@@ -148,9 +150,9 @@ public class SurvivalChancePlugin extends Plugin
 	}
 
 	@Subscribe
-	public void onStatChanged(StatChanged statChanged)
+	public void onStatChanged(StatChanged event)
 	{
-		this.playerState.statChanged(statChanged.getSkill());
+		this.playerState.statChanged(event.getSkill());
 	}
 
 	@Subscribe
@@ -172,6 +174,12 @@ public class SurvivalChancePlugin extends Plugin
 				this.updateInfoBox(HitResult.USED_PHOENIX);
 			}
 		}
+	}
+
+	@Subscribe
+	public void onVarbitChanged(VarbitChanged event)
+	{
+		this.playerState.varbitChanged(event.getVarbitId());
 	}
 
 	@Subscribe
