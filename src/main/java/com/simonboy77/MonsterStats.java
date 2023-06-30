@@ -45,14 +45,14 @@ public class MonsterStats {
 
     // TODO: Fix this json mess. magicAttack should be magicStat, same fro ranged
     public int getAttackLevel(int id) { return this.getMonsterInt(id, "attack_level"); }
-    public int getAttackStat(int id) { return this.getMonsterInt(id, "attack_bonus"); }
+    public int getAttackStat(int id) { return this.getMonsterInt(id, "attack_stat"); }
     public int getAttackSpeed(int id) { return this.getMonsterInt(id, "attack_speed"); }
 
     public int getMagicLevel(int id) { return this.getMonsterInt(id, "magic_level"); }
-    public int getMagicAttack(int id) { return this.getMonsterInt(id, "magic_attack"); }
+    public int getMagicStat(int id) { return this.getMonsterInt(id, "magic_stat"); }
 
     public int getRangedLevel(int id) { return this.getMonsterInt(id, "ranged_level"); }
-    public int getRangedAttack(int id) { return this.getMonsterInt(id, "ranged_attack"); }
+    public int getRangedStat(int id) { return this.getMonsterInt(id, "ranged_attack"); }
 
     public ArrayList<String> getAttackStyles(int id)
     {

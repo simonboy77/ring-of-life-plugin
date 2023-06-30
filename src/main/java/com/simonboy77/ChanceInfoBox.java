@@ -65,6 +65,11 @@ public class ChanceInfoBox extends InfoBox {
                     return this.getStringFromChance();
                 } // else { return ""; }
             } break;
+            case HitResult.USED_REDEMPTION: {
+                if(this.playerState.isRedemptionActive()) {
+                    return this.getStringFromChance();
+                } // else { return ""; }
+            } break;
         }
 
         return "";
@@ -79,6 +84,7 @@ public class ChanceInfoBox extends InfoBox {
             case HitResult.RESULT_ESCAPE: return Color.YELLOW;
             case HitResult.RESULT_DEATH: return Color.RED;
             case HitResult.USED_PHOENIX: return Color.ORANGE;
+            case HitResult.USED_REDEMPTION: return Color.BLUE;
             default: return Color.WHITE;
         }
     }
@@ -89,10 +95,12 @@ public class ChanceInfoBox extends InfoBox {
         switch(this.resultId) {
             case HitResult.RESULT_SURVIVE: {
                 return (this.config.showSurvivalChance() && this.playerState.isInCombat());
-            }
+            } // break;
+
             case HitResult.RESULT_DEATH: {
                 return (this.config.showDeathChance() && this.playerState.isInCombat());
-            }
+            } // break;
+
             case HitResult.RESULT_ESCAPE: {
                 if (this.playerState.isWearingEscapeItem()) {
                     return (this.config.showEscapeChance() && this.playerState.isInCombat());
@@ -105,11 +113,25 @@ public class ChanceInfoBox extends InfoBox {
                     } // else { return false; }
                 }
             } break;
+
             case HitResult.USED_PHOENIX: {
                 if (this.playerState.isWearingPhoenix()) {
                     return (this.config.showPhoenixChance() && this.playerState.isInCombat());
                 } else {
                     SurvivalChanceConfig.WarningShow warning = this.config.warnPhoenix();
+                    if (warning == SurvivalChanceConfig.WarningShow.ALWAYS) {
+                        return true;
+                    } else if (warning == SurvivalChanceConfig.WarningShow.IN_COMBAT) {
+                        return this.playerState.isInCombat();
+                    } // else { return false }
+                }
+            } break;
+
+            case HitResult.USED_REDEMPTION: {
+                if (this.playerState.isRedemptionActive()) {
+                    return (this.config.showRedemptionChance() && this.playerState.isInCombat());
+                } else {
+                    SurvivalChanceConfig.WarningShow warning = this.config.warnRedemption();
                     if (warning == SurvivalChanceConfig.WarningShow.ALWAYS) {
                         return true;
                     } else if (warning == SurvivalChanceConfig.WarningShow.IN_COMBAT) {
@@ -129,6 +151,7 @@ public class ChanceInfoBox extends InfoBox {
         {
             case HitResult.RESULT_SURVIVE: return "Chance of Survival";
             case HitResult.RESULT_DEATH: return "Chance of Death";
+
             case HitResult.RESULT_ESCAPE: {
                 if(this.playerState.isWearingEscapeItem()) {
                     return "Chance of Escape";
@@ -137,12 +160,22 @@ public class ChanceInfoBox extends InfoBox {
                     return "You are not wearing an escape item!";
                 }
             }
+
             case HitResult.USED_PHOENIX: {
                 if(this.playerState.isWearingPhoenix()) {
                     return "Chance of using Phoenix";
                 }
                 else {
                     return "You are not wearing a phoenix necklace!";
+                }
+            }
+
+            case HitResult.USED_REDEMPTION: {
+                if(this.playerState.isRedemptionActive()) {
+                    return "Chance of using Redemption";
+                }
+                else {
+                    return "Redemption is not active!";
                 }
             }
         }

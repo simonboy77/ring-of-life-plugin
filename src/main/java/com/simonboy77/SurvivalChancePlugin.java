@@ -9,15 +9,12 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import javax.imageio.ImageIO;
 
-import net.runelite.api.Client;
-import net.runelite.api.Varbits;
+import net.runelite.api.*;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.InteractingChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.VarbitChanged;
-import net.runelite.api.NPC;
-import net.runelite.api.InventoryID;
 
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.events.ConfigChanged;
@@ -28,9 +25,15 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.infobox.InfoBox;
 import net.runelite.client.ui.overlay.infobox.InfoBoxManager;
 
+// TESTING
+import net.runelite.api.events.GameStateChanged;
+
+
 @Slf4j
 @PluginDescriptor(
-	name = "Survival Chance"
+	name = "Survival Chance",
+	description = "Calculates the chance of survival, escape and death within a given amount of seconds",
+	tags = {"combat", "hardcore", "survival","escape","ring of life"}
 )
 public class SurvivalChancePlugin extends Plugin
 {
@@ -74,6 +77,8 @@ public class SurvivalChancePlugin extends Plugin
 			switch(resultId)
 			{
 				case HitResult.RESULT_SURVIVE: { filePath = "icons/survival.png"; } break;
+				case HitResult.RESULT_DEATH: { filePath = "icons/death.png"; } break;
+
 				case HitResult.RESULT_ESCAPE:
 				{
 					if(this.playerState.isWearingEscapeItem()) {
@@ -94,7 +99,7 @@ public class SurvivalChancePlugin extends Plugin
 					}
 
 				} break;
-				case HitResult.RESULT_DEATH: { filePath = "icons/death.png"; } break;
+
 				case HitResult.USED_PHOENIX:
 				{
 					if(this.playerState.isWearingPhoenix()) {
@@ -102,6 +107,16 @@ public class SurvivalChancePlugin extends Plugin
 					}
 					else {
 						filePath = "icons/phoenix_warning.png";
+					}
+				} break;
+
+				case HitResult.USED_REDEMPTION:
+				{
+					if(this.playerState.isRedemptionActive()) {
+						filePath = "icons/redemption.png";
+					}
+					else {
+						filePath = "icons/redemption_warning.png";
 					}
 				} break;
 			}
@@ -164,7 +179,7 @@ public class SurvivalChancePlugin extends Plugin
 			boolean wasWearingEscapeItem = this.playerState.isWearingEscapeItem();
 			boolean wasWearingPhoenix = this.playerState.isWearingPhoenix();
 
-			this.playerState.updateEquipment(event.getItemContainer());
+			this.playerState.equipmentChanged(event.getItemContainer());
 
 			if(wasWearingEscapeItem != this.playerState.isWearingEscapeItem()) {
 				this.updateInfoBox(HitResult.RESULT_ESCAPE);
@@ -179,17 +194,30 @@ public class SurvivalChancePlugin extends Plugin
 	@Subscribe
 	public void onVarbitChanged(VarbitChanged event)
 	{
-		this.playerState.varbitChanged(event.getVarbitId());
+		this.playerState.varbitChanged(event.getVarbitId(), event.getVarpId());
 	}
 
 	@Subscribe
 	public void onConfigChanged(ConfigChanged configChanged)
 	{
-		if(configChanged.getKey().equals("hitTurns")) {
+		String key = configChanged.getKey();
+
+		if(key.equals("secondsOfCombat")) {
 			this.playerState.calcSurvivalChance();
 		}
-		else if(configChanged.getKey().equals("altEscapeIcon")) {
+		else if(key.equals("altEscapeIcon")) {
 			this.updateInfoBox(HitResult.RESULT_ESCAPE);
+		}
+	}
+
+	// TESTING
+	@Subscribe
+	public void onGameStateChanged(GameStateChanged gameStateChanged)
+	{
+		if (gameStateChanged.getGameState() == GameState.LOGIN_SCREEN ||
+			gameStateChanged.getGameState() == GameState.CONNECTION_LOST)
+		{
+			log.info("disconnected at tick " + this.client.getTickCount());
 		}
 	}
 
